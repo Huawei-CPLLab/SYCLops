@@ -1,0 +1,12 @@
+@LIT_SITE_CFG_IN_HEADER@
+
+import sys
+
+config.syclops_obj_root = "@SYCLOPS_BINARY_DIR@"
+config.llvm_tools_dir = "@LLVM_TOOLS_DIR@"
+
+import lit.llvm
+lit.llvm.initialize(lit_config, config)
+
+# Let the main config do the real work.
+lit_config.load_config(config, "@SYCLOPS_SOURCE_DIR@/test/lit.cfg.py")
