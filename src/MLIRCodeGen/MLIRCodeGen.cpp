@@ -1875,13 +1875,6 @@ MemRefType MLIRCodeGen::getMemrefType(llvm::Value *Val) {
 
   // Get the address space
   unsigned AddrSpace = S->getAddrSpace();
-  switch (AddrSpace) {
-  case 4:
-    AddrSpace = 6;
-    break;
-  default:
-    break;
-  }
   auto ASAttr = Builder.getIntegerAttr(Builder.getI64Type(), AddrSpace);
 
   // Handle offsets and strides. For now assume dynamic offset and dynamic

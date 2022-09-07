@@ -34,6 +34,16 @@ ninja check-syclops
 
 `check-syclops` will compile the required executables (clang++, opt, syclops) and run the tests located in the `/test` directory which will ensure that SYCLops built correctly.
 
+### Requirements
+
+SYCLops follows the same requirements as LLVM, specified here: https://llvm.org/docs/GettingStarted.html#software
+
+Namely:
+- CMake 3.13.4 and above
+- GCC 7.1.0 and above
+
+Older versions "may" work.
+
 ## Example
 
 Once you have run the above installation, all of the executables you will need to use SYCLops would have been built for you in the `build/bin` directory. For a simple example, we will be converting the Kmeans kernel found in `test/static_usmbuffer_tests/parallel_usmbuffer_kmeans.cpp` into MLIR using SYCLops.
@@ -78,11 +88,16 @@ In short, there are four main reasons we chose to enter into LLVM first as oppos
 
 ## Supported SYCL Features
 
+### Memory Buffers
 - USM Pointers
   - Static shape: for static shape these pointers must be cast to a nested array structure such that the shape information can be passed into the device kernel.
 - SYCL Buffers
   - 1D buffers: Supported
   - Multi-D buffers: WIP: A change with upstream LICM has broken the delinearization of the multi-D SYCL buffers. We are working on fixing this.
+
+### SYCL Command Groups
+- `single_task`
+- `parallel_for`
 
 ## Citing
 ```bibtex
