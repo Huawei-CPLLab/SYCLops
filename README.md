@@ -40,7 +40,10 @@ SYCLops follows the same requirements as LLVM, specified here: https://llvm.org/
 
 Namely:
 - CMake 3.13.4 and above
+  - For the build command above, we use `ninja` as our generator. This is also needed.
+- Python3 3.6 and above
 - GCC 7.1.0 and above
+- g++
 
 Older versions "may" work.
 

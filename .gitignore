@@ -1,1 +1,5 @@
+# The build directory for SYCLops
 /build*
+
+# VSCode configuration files
+.vscode
