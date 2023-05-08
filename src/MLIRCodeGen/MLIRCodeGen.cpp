@@ -20,8 +20,8 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
-#include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/IRMapping.h"
 #include "mlir/IR/IntegerSet.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Interfaces/DataLayoutInterfaces.h"
@@ -48,8 +48,8 @@ MLIRCodeGen::MLIRCodeGen(const llvm::Module &M, unsigned indexBitwidth)
       indexBitwidth(indexBitwidth) {
   // Register and load required dialects into the MLIR Context
   DialectRegistry Registry;
-  Registry.insert<AffineDialect>();
-  Registry.insert<arith::ArithmeticDialect>();
+  Registry.insert<affine::AffineDialect>();
+  Registry.insert<arith::ArithDialect>();
   Registry.insert<func::FuncDialect>();
   Registry.insert<scf::SCFDialect>();
   Registry.insert<math::MathDialect>();
@@ -504,7 +504,8 @@ AffineExpr MLIRCodeGen::getIndexAffineExpr(llvm::Value *Index,
       MapArgs.insert(MapArgs.end(), CallSymArgs.begin(), CallSymArgs.end());
       // Build the AffineMinOp and add it as a symbol operand; the result of an
       // operation should be a symbol.
-      mlir::Value IndexVal = Builder.create<AffineMinOp>(Loc, MinMap, MapArgs);
+      mlir::Value IndexVal =
+          Builder.create<affine::AffineMinOp>(Loc, MinMap, MapArgs);
       LLVMToMLIRIndexValueMap[Index] = IndexVal;
       unsigned Pos = insertIntoVector(SymArgs, IndexVal);
       return getAffineSymbolExpr(Pos, getContext());
@@ -527,7 +528,8 @@ AffineExpr MLIRCodeGen::getIndexAffineExpr(llvm::Value *Index,
       MapArgs.insert(MapArgs.end(), CallSymArgs.begin(), CallSymArgs.end());
       // Build the AffineMinOp and add it as a symbol operand; the result of an
       // operation should be a symbol.
-      mlir::Value IndexVal = Builder.create<AffineMaxOp>(Loc, MaxMap, MapArgs);
+      mlir::Value IndexVal =
+          Builder.create<affine::AffineMaxOp>(Loc, MaxMap, MapArgs);
       LLVMToMLIRIndexValueMap[Index] = IndexVal;
       unsigned Pos = insertIntoVector(SymArgs, IndexVal);
       return getAffineSymbolExpr(Pos, getContext());
@@ -684,7 +686,7 @@ mlir::Value MLIRCodeGen::genConstantOperand(const Constant *CO) {
   Location Loc = Builder.getUnknownLoc();
 
   // Get the constant attr given the element type
-  mlir::Attribute Attr;
+  mlir::TypedAttr Attr;
   if (auto *FVTy = dyn_cast<FixedVectorType>(CO->getType())) {
     assert((llvm::isa<ConstantDataVector, ConstantVector>(CO)) &&
            "Constant vector expected to be a Constant[Data]Vector.");
@@ -957,12 +959,14 @@ mlir::Value MLIRCodeGen::genLoadInst(LoadInst *LI) {
     // 1 with the same length as the vector, we can always say the index is 0.
     Map = AffineMap::getConstantMap(0, getContext());
     // Create the vector load
-    return Builder.create<AffineVectorLoadOp>(Loc, VTy, Memref, Map, MapArgs);
+    return Builder.create<affine::AffineVectorLoadOp>(Loc, VTy, Memref, Map,
+                                                      MapArgs);
   }
 
   // Create the AffineLoadOp
   mlir::Value Memref = genMemrefOperand(PtrOperand, Map, MapArgs);
-  return Builder.create<AffineLoadOp>(Loc, Memref, Map, MapArgs).getResult();
+  return Builder.create<affine::AffineLoadOp>(Loc, Memref, Map, MapArgs)
+      .getResult();
 }
 
 /// Generate an MLIR AffineStorOp for the given LLVM StoreInst.
@@ -989,13 +993,14 @@ void MLIRCodeGen::genStoreInst(StoreInst *SI) {
     // Since we are implicitly converting the Vector args into Memrefs of rank 1
     // with the same length as the vector, we can always say the index is 0.
     Map = AffineMap::get(0, 0, getAffineConstantExpr(0, getContext()));
-    Builder.create<AffineVectorStoreOp>(Loc, StoreVal, Memref, Map, MapArgs);
+    Builder.create<affine::AffineVectorStoreOp>(Loc, StoreVal, Memref, Map,
+                                                MapArgs);
     return;
   }
 
   // Create the AffineStoreOp
   mlir::Value Memref = genMemrefOperand(PtrOperand, Map, MapArgs);
-  Builder.create<AffineStoreOp>(Loc, StoreVal, Memref, Map, MapArgs);
+  Builder.create<affine::AffineStoreOp>(Loc, StoreVal, Memref, Map, MapArgs);
 }
 
 /// Generate the MLIR Op associated with the given LLVM CastInst.
@@ -1312,7 +1317,9 @@ mlir::Value MLIRCodeGen::genCallInst(const CallInst *CI) {
     auto FuncTy = mlir::FunctionType::get(getContext(), FuncArgTypes, ResTy);
     assert(GlobalValue::isExternalLinkage(Func->getLinkage()) &&
            "Function with declaration expected to have external linkage");
-    mlir::StringAttr Visibility = Builder.getStringAttr("private");
+    OperationName FuncOpName = OperationName(func::FuncOp::getOperationName(), getContext());
+    StringRef VisAttrName = func::FuncOp::getSymVisibilityAttrName(FuncOpName);
+    NamedAttribute Visibility = Builder.getNamedAttr(VisAttrName, Builder.getStringAttr("private"));
     Builder.create<func::FuncOp>(FuncLoc, FuncName, FuncTy, Visibility);
   }
 
@@ -1356,7 +1363,8 @@ void MLIRCodeGen::genMemCpyInst(const MemCpyInst *MEMCPY) {
   unsigned EltTyByteWidth = DestTy.getElementTypeBitWidth() / 8;
   AffineExpr ByteUBExpr = UBMap.getResult(0).floorDiv(EltTyByteWidth);
   UBMap = AffineMap::get(UBMap.getNumDims(), UBMap.getNumSymbols(), ByteUBExpr);
-  auto ForOp = Builder.create<AffineForOp>(Loc, LBArgs, LBMap, UBArgs, UBMap);
+  auto ForOp =
+      Builder.create<affine::AffineForOp>(Loc, LBArgs, LBMap, UBArgs, UBMap);
 
   // Get the src and dest offsets. The MemCpyInst may use GEPs to index into the
   // pointers, similar to how it is done for loads and stores, so we gather the
@@ -1385,8 +1393,10 @@ void MLIRCodeGen::genMemCpyInst(const MemCpyInst *MEMCPY) {
 
   // Create the load and store Op
   Builder.setInsertionPoint(ForOp.getLoopBody().front().getTerminator());
-  auto LoadOp = Builder.create<AffineLoadOp>(Loc, Src, LdMap, LdMapArgs);
-  Builder.create<AffineStoreOp>(Loc, LoadOp.getResult(), Dest, StrMap, StrMapArgs);
+  auto LoadOp =
+      Builder.create<affine::AffineLoadOp>(Loc, Src, LdMap, LdMapArgs);
+  Builder.create<affine::AffineStoreOp>(Loc, LoadOp.getResult(), Dest, StrMap,
+                                        StrMapArgs);
 }
 
 /// Generate the MLIR equivalent if an LLVM MemSetInst.
@@ -1419,7 +1429,8 @@ void MLIRCodeGen::genMemSetInst(const MemSetInst *MEMSET) {
   unsigned EltTyByteWidth = DestTy.getElementTypeBitWidth() / 8;
   AffineExpr ByteUBExpr = UBMap.getResult(0).floorDiv(EltTyByteWidth);
   UBMap = AffineMap::get(UBMap.getNumDims(), UBMap.getNumSymbols(), ByteUBExpr);
-  auto ForOp = Builder.create<AffineForOp>(Loc, LBArgs, LBMap, UBArgs, UBMap);
+  auto ForOp =
+      Builder.create<affine::AffineForOp>(Loc, LBArgs, LBMap, UBArgs, UBMap);
 
   // Get the value to store. The value to store will be given as a single byte
   // that will be written into each byte of the element.
@@ -1474,7 +1485,7 @@ void MLIRCodeGen::genMemSetInst(const MemSetInst *MEMSET) {
 
   // Create the store Op
   Builder.setInsertionPoint(ForOp.getLoopBody().front().getTerminator());
-  Builder.create<AffineStoreOp>(Loc, StoreVal, Dest, Map, MapOperands);
+  Builder.create<affine::AffineStoreOp>(Loc, StoreVal, Dest, Map, MapOperands);
 }
 
 /// Given an LLVM Value representing either the lower or upper bound of a loop,
@@ -1588,14 +1599,15 @@ void MLIRCodeGen::genLoopOp(const Loop *L) {
       ReverseArgs.push_back(IndexIV);
       // Canonicalize and simplify the map and its operands to remove duplicate
       // args and make the affine expression simpler.
-      canonicalizeMapAndOperands(&ReverseIVMap, &ReverseArgs);
+      affine::canonicalizeMapAndOperands(&ReverseIVMap, &ReverseArgs);
       ReverseIVMap = simplifyAffineMap(ReverseIVMap);
       // Build an AffineApplyOp to perform the transformation on the IV, for now
       // store it with the cast, but this will need to be moved into the body of
       // the ForOp.
       OpBuilder::InsertionGuard Guard(Builder);
       Builder.setInsertionPoint(CastIV.getDefiningOp());
-      ReverseIV = Builder.create<AffineApplyOp>(Loc, ReverseIVMap, ReverseArgs);
+      ReverseIV =
+          Builder.create<affine::AffineApplyOp>(Loc, ReverseIVMap, ReverseArgs);
       // Replace all uses of the IV with this reversed IV.
       IndexIV.replaceAllUsesExcept(ReverseIV, ReverseIV.getDefiningOp());
     }
@@ -1609,10 +1621,10 @@ void MLIRCodeGen::genLoopOp(const Loop *L) {
       SmallVector<mlir::Value> YieldOperands = {};
       for (LoopIterArg &IterArg : LoopIterArgs)
         YieldOperands.push_back(genOperand(IterArg.ExitVal));
-      OpBuilder.create<AffineYieldOp>(Loc, YieldOperands);
+      OpBuilder.create<affine::AffineYieldOp>(Loc, YieldOperands);
     };
     // Create the AffineForOp
-    auto AffForOp = Builder.create<AffineForOp>(
+    auto AffForOp = Builder.create<affine::AffineForOp>(
         Loc, LBArgs, LBMap, UBArgs, UBMap, Step, IterArgs, BodyBuilder);
     ForOp = AffForOp;
     RegionIterArgs = AffForOp.getRegionIterArgs();
@@ -1810,8 +1822,8 @@ void MLIRCodeGen::genIfOp(const BasicBlock *BB) {
     Args.insert(Args.end(), DimArgs.begin(), DimArgs.end());
     Args.insert(Args.end(), SymArgs.begin(), SymArgs.end());
     // Create the IfOp
-    auto AffIfOp =
-        Builder.create<AffineIfOp>(Loc, ResTypes, Set, Args, WithElseRegion);
+    auto AffIfOp = Builder.create<affine::AffineIfOp>(Loc, ResTypes, Set, Args,
+                                                      WithElseRegion);
     IfOp = AffIfOp;
     IfThenBlock = AffIfOp.getThenBlock();
     if (WithElseRegion)
@@ -1833,7 +1845,7 @@ void MLIRCodeGen::genIfOp(const BasicBlock *BB) {
     for (IfEscVal &EscVal : EscapeVals)
       ThenYieldOperands.push_back(genOperand(EscVal.TrueVal));
     if (IsAffineIf)
-      Builder.create<AffineYieldOp>(Loc, ThenYieldOperands);
+      Builder.create<affine::AffineYieldOp>(Loc, ThenYieldOperands);
     else
       Builder.create<scf::YieldOp>(Loc, ThenYieldOperands);
     // Yield for else block
@@ -1842,7 +1854,7 @@ void MLIRCodeGen::genIfOp(const BasicBlock *BB) {
     for (IfEscVal &EscVal : EscapeVals)
       ElseYieldOperands.push_back(genOperand(EscVal.FalseVal));
     if (IsAffineIf)
-      Builder.create<AffineYieldOp>(Loc, ElseYieldOperands);
+      Builder.create<affine::AffineYieldOp>(Loc, ElseYieldOperands);
     else
       Builder.create<scf::YieldOp>(Loc, ElseYieldOperands);
   }
@@ -1864,7 +1876,7 @@ MemRefType MLIRCodeGen::getMemrefType(llvm::Value *Val) {
   SmallVector<int64_t> MemRefShape = {};
   for (unsigned Dim = 0, NumDims = S->getNumDims(); Dim < NumDims; Dim++) {
     if (S->isDynamic()) {
-      MemRefShape.push_back(ShapedType::kDynamicSize);
+      MemRefShape.push_back(ShapedType::kDynamic);
     } else {
       MemRefShape.push_back(S->getDim(Dim));
     }
@@ -1999,7 +2011,7 @@ void MLIRCodeGen::insertLoopBlockIntoParent(const BasicBlock *Parent,
 
   // Get the ForOp body
   mlir::Block *LoopBody = nullptr;
-  if (auto AffForOp = dyn_cast<AffineForOp>(ForOp))
+  if (auto AffForOp = dyn_cast<affine::AffineForOp>(ForOp))
     LoopBody = &AffForOp.getLoopBody().front();
   else if (auto SCFForOp = dyn_cast<scf::ForOp>(ForOp))
     LoopBody = &SCFForOp.getLoopBody().front();
@@ -2052,7 +2064,7 @@ void MLIRCodeGen::generateIfElse(const BasicBlock *Parent,
   // Get the IfOp's then and else blocks
   mlir::Block *IfThenBlock = nullptr;
   mlir::Block *IfElseBlock = nullptr;
-  if (auto AffIfOp = dyn_cast<AffineIfOp>(IfOp)) {
+  if (auto AffIfOp = dyn_cast<affine::AffineIfOp>(IfOp)) {
     IfThenBlock = AffIfOp.getThenBlock();
     if (AffIfOp.hasElse())
       IfElseBlock = AffIfOp.getElseBlock();
@@ -2134,8 +2146,10 @@ static void outlineMLIRBlock(Block *Block, llvm::StringRef FuncName,
   OpBuilder::InsertionGuard Guard(Builder);
   func::FuncOp Func = Block->getParentOp()->getParentOfType<func::FuncOp>();
   Builder.setInsertionPointAfter(Func);
-  mlir::StringAttr Visibility = Builder.getStringAttr("private");
   Location Loc = Block->getParentOp()->getLoc();
+  OperationName FuncOpName = OperationName(func::FuncOp::getOperationName(), Builder.getContext());
+  StringRef VisAttrName = func::FuncOp::getSymVisibilityAttrName(FuncOpName);
+  NamedAttribute Visibility = Builder.getNamedAttr(VisAttrName, Builder.getStringAttr("private"));
   auto OutlinedFunc =
       Builder.create<func::FuncOp>(Loc, FuncName, FuncTy, Visibility);
 
@@ -2149,7 +2163,7 @@ static void outlineMLIRBlock(Block *Block, llvm::StringRef FuncName,
   // function. A mapper is used to map the function args to their uses in the
   // new function, as well as the new internal values.
   Builder.setInsertionPointToStart(OutlinedFunc.addEntryBlock());
-  BlockAndValueMapping Mapper;
+  IRMapping Mapper;
   for (size_t i = 0; i < FuncArgs.size(); i++)
     Mapper.map(FuncArgs[i], OutlinedFunc.getArgument(i));
   SmallVector<Operation *> OpsToErase;
@@ -2251,7 +2265,7 @@ void MLIRCodeGen::finalize() {
     else
       TrampBuilder.addPointerArg(FuncArg, Ty);
     // Offset
-    if (!ShapedType::isDynamicStrideOrOffset(Offset)) {
+    if (!ShapedType::isDynamic(Offset)) {
       Value *OffsetRoot = ConstantInt::get(IndexType, Offset);
       TrampBuilder.addScalarArg(OffsetRoot, IndexType);
     } else {
@@ -2281,7 +2295,7 @@ void MLIRCodeGen::finalize() {
     // should always be one.)
     unsigned NumDynamicStrides = 0;
     for (int64_t Stride : Strides) {
-      if (ShapedType::isDynamicStrideOrOffset(Stride))
+      if (ShapedType::isDynamic(Stride))
         NumDynamicStrides++;
     }
     // If all strides are static, then we just add then to the argument
@@ -2336,7 +2350,7 @@ void MLIRCodeGen::finalize() {
   SmallVector<Block *> OutlineBlocks;
   auto areValidAffineIndices = [&](OperandRange indices) {
     for (mlir::Value Idx : indices)
-      if (!isValidSymbol(Idx) && !isValidDim(Idx))
+      if (!affine::isValidSymbol(Idx) && !affine::isValidDim(Idx))
         return false;
     return true;
   };
@@ -2345,17 +2359,17 @@ void MLIRCodeGen::finalize() {
     if (OutlineBlocksSet.contains(ParentBlock))
       return;
     bool IsValid = true;
-    if (auto StoreOp = dyn_cast<AffineStoreOp>(Op))
+    if (auto StoreOp = dyn_cast<affine::AffineStoreOp>(Op))
       IsValid = areValidAffineIndices(StoreOp.getIndices());
-    else if (auto LoadOp = dyn_cast<AffineLoadOp>(Op))
+    else if (auto LoadOp = dyn_cast<affine::AffineLoadOp>(Op))
       IsValid = areValidAffineIndices(LoadOp.getIndices());
-    else if (auto VecStoreOp = dyn_cast<AffineVectorStoreOp>(Op))
+    else if (auto VecStoreOp = dyn_cast<affine::AffineVectorStoreOp>(Op))
       IsValid = areValidAffineIndices(VecStoreOp.getIndices());
-    else if (auto VecLoadOp = dyn_cast<AffineVectorLoadOp>(Op))
+    else if (auto VecLoadOp = dyn_cast<affine::AffineVectorLoadOp>(Op))
       IsValid = areValidAffineIndices(VecLoadOp.getIndices());
-    else if (auto IfOp = dyn_cast<AffineIfOp>(Op))
+    else if (auto IfOp = dyn_cast<affine::AffineIfOp>(Op))
       IsValid = areValidAffineIndices(IfOp.getOperands());
-    else if (auto ForOp = dyn_cast<AffineForOp>(Op)) {
+    else if (auto ForOp = dyn_cast<affine::AffineForOp>(Op)) {
       IsValid = areValidAffineIndices(ForOp.getUpperBoundOperands()) &&
                 areValidAffineIndices(ForOp.getLowerBoundOperands());
     }
@@ -2513,7 +2527,7 @@ Error MLIRCodeGen::generateMainForTesting() {
         Operands.push_back(Operand.getResult());
       } else if (auto ZeroAttr = Builder.getZeroAttr(Arg.getType())) {
         auto ZeroVal =
-            Builder.create<arith::ConstantOp>(Loc, ZeroAttr, Arg.getType());
+            Builder.create<arith::ConstantOp>(Loc, Arg.getType(), ZeroAttr);
         Operands.push_back(ZeroVal);
       } else {
         llvm_unreachable("Unhandled Func Arg when generating @main.");

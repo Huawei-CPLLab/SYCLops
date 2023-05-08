@@ -28,6 +28,7 @@ cmake -G Ninja ../llvm/llvm \
   -DSYCL_ENABLE_PLUGINS="opencl;level_zero" \
   -DLLVM_TARGETS_TO_BUILD="host" \
   -DLLVM_ENABLE_ASSERTIONS=ON \
+  -DSYCL_ENABLE_KERNEL_FUSION=OFF \
   -DCMAKE_BUILD_TYPE=Release
 ninja check-syclops
 ```
@@ -65,7 +66,6 @@ clang++ \
   -O2 \
   -mllvm -sycl-opt=false \
   -mllvm -disable-loop-idiom-memset \
-  -fno-legacy-pass-manager \
   -fno-unroll-loops \
   -fno-vectorize \
   -ffp-contract=off \

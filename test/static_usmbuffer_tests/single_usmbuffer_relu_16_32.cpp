@@ -22,7 +22,7 @@ using namespace ::sycl;
 using _Array = Array<float, N, M>;
 
 int main() {
-  queue deviceQueue(default_selector{});
+  queue deviceQueue(default_selector_v);
 
   const device dev = deviceQueue.get_device();
   const context ctx = deviceQueue.get_context();

@@ -22,7 +22,7 @@ add_llvm_tool(syclops
 # Link to the MLIR libs and headers
 set(MLIR_LIBS
   MLIRAffineDialect
-  MLIRArithmeticDialect
+  MLIRArithDialect
   MLIRFuncDialect
   MLIRIR
   MLIRLLVMDialect

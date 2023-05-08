@@ -11,7 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "MLIRCodeGen/LLVMToMLIR.h"
-#include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Types.h"
 #include "llvm/IR/InstrTypes.h"

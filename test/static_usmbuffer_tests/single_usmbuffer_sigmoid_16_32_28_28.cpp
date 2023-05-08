@@ -24,7 +24,7 @@ using namespace ::sycl;
 using _Array = Array<float, N, C, H, W>;
 
 int main() {
-  sycl::queue deviceQueue(sycl::default_selector{});
+  queue deviceQueue(default_selector_v);
 
   const device dev = deviceQueue.get_device();
   const context ctx = deviceQueue.get_context();
@@ -69,15 +69,15 @@ int main() {
 // MLIR:      func.func @{{[a-zA-Z0-9\$_]+}}(%arg0: memref<8x8x16x32xf32, 1>, %arg1: memref<8x8x16x32xf32, 1>) {
 // MLIR-NEXT:   %cst = arith.constant 1.000000e+00 : f32
 // MLIR-NEXT:   %cst_0 = arith.constant 0.000000e+00 : f32
-// MLIR-NEXT:   %0 = memref.alloca() : memref<8x8x16x32xf32>
+// MLIR-NEXT:   %alloca = memref.alloca() : memref<8x8x16x32xf32>
 // MLIR-NEXT:   affine.for %arg2 = 0 to 8 {
 // MLIR-NEXT:     affine.for %arg3 = 0 to 8 {
 // MLIR-NEXT:       affine.for %arg4 = 0 to 16 {
 // MLIR-NEXT:         affine.for %arg5 = 0 to 32 {
-// MLIR-NEXT:           %1 = affine.load %arg0[%arg2, %arg3, %arg4, %arg5] : memref<8x8x16x32xf32, 1>
-// MLIR-NEXT:           %2 = arith.subf %cst_0, %1 : f32
-// MLIR-NEXT:           %3 = math.exp %2 : f32
-// MLIR-NEXT:           affine.store %3, %0[%arg2, %arg3, %arg4, %arg5] : memref<8x8x16x32xf32>
+// MLIR-NEXT:           %0 = affine.load %arg0[%arg2, %arg3, %arg4, %arg5] : memref<8x8x16x32xf32, 1>
+// MLIR-NEXT:           %1 = arith.subf %cst_0, %0 : f32
+// MLIR-NEXT:           %2 = math.exp %1 : f32
+// MLIR-NEXT:           affine.store %2, %alloca[%arg2, %arg3, %arg4, %arg5] : memref<8x8x16x32xf32>
 // MLIR-NEXT:         }
 // MLIR-NEXT:       }
 // MLIR-NEXT:     }
@@ -86,10 +86,10 @@ int main() {
 // MLIR-NEXT:     affine.for %arg3 = 0 to 8 {
 // MLIR-NEXT:       affine.for %arg4 = 0 to 16 {
 // MLIR-NEXT:         affine.for %arg5 = 0 to 32 {
-// MLIR-NEXT:           %1 = affine.load %0[%arg2, %arg3, %arg4, %arg5] : memref<8x8x16x32xf32>
-// MLIR-NEXT:           %2 = arith.addf %1, %cst : f32
-// MLIR-NEXT:           %3 = arith.divf %cst, %2 : f32
-// MLIR-NEXT:           affine.store %3, %arg1[%arg2, %arg3, %arg4, %arg5] : memref<8x8x16x32xf32, 1>
+// MLIR-NEXT:           %0 = affine.load %alloca[%arg2, %arg3, %arg4, %arg5] : memref<8x8x16x32xf32>
+// MLIR-NEXT:           %1 = arith.addf %0, %cst : f32
+// MLIR-NEXT:           %2 = arith.divf %cst, %1 : f32
+// MLIR-NEXT:           affine.store %2, %arg1[%arg2, %arg3, %arg4, %arg5] : memref<8x8x16x32xf32, 1>
 // MLIR-NEXT:         }
 // MLIR-NEXT:       }
 // MLIR-NEXT:     }

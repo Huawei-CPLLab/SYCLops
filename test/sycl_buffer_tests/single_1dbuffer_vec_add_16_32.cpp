@@ -33,7 +33,7 @@ int main() {
     B_tensor[i] = 2;
     OUT_tensor[i] = 0;
   }
-  queue deviceQueue(default_selector{});
+  queue deviceQueue(default_selector_v);
   buffer<float, 1> A_buf(A_tensor.data(), range<1>(N));
   buffer<float, 1> B_buf(B_tensor.data(), range<1>(N));
   buffer<float, 1> OUT_buf(OUT_tensor.data(), range<1>(N));

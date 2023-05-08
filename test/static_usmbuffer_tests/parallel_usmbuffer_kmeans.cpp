@@ -28,7 +28,7 @@ using _Array_clusters = Array<float, CLUSTER_SIZE>;
 using _Array_membership = Array<int, PROBLEM_SIZE>;
 
 int main() {
-  queue deviceQueue(default_selector{});
+  queue deviceQueue(default_selector_v);
 
   const device dev = deviceQueue.get_device();
   const context ctx = deviceQueue.get_context();

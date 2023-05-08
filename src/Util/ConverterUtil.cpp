@@ -48,7 +48,7 @@ Error rejectUnsupportedBuiltin(const Function *F) {
       if (!CalledFunc)
         return createError("Cannot support indirect function calls");
       // If called function is defined in the module, let it go through
-      if (!CalledFunc->getBasicBlockList().empty())
+      if (!CalledFunc->empty())
         continue;
       // We also don't care about intrinsic functions
       if (CalledFunc->isIntrinsic())
