@@ -146,6 +146,41 @@ unsigned unwrapStructs(const Type *&Ty) {
   return Levels;
 }
 
+static Value *traceUseForPointer(Value *V) {
+  User *Usr = *V->user_begin();
+  // return on GEP/load/store
+  if (isa<GetElementPtrInst>(Usr) || isa<LoadInst>(Usr) || isa<StoreInst>(Usr))
+    return Usr;
+  if (isa<CastInst>(Usr))
+    return traceUseForPointer(Usr);
+  llvm_unreachable("Unexpected use of pointer");
+}
+
+/// Tries to infer the pointer element type from the opaque pointer.
+Type *getPointerElementType(Value *V) {
+  assert(isa<PointerType>(V->getType()) &&
+         "Expecting input to be a pointer type");
+  // Tracing the def chain from v:
+  Value *Def = tracePastCastInsts(V);
+  if (auto *Arg = dyn_cast<Argument>(Def))
+    if (auto *ElType = Arg->getPointeeInMemoryValueType())
+      return ElType;
+  if (auto *AI = dyn_cast<AllocaInst>(Def))
+    return AI->getAllocatedType();
+  if (auto *GV = dyn_cast<GlobalValue>(Def))
+    return GV->getValueType();
+
+  // Tracing the use chain from V
+  V = traceUseForPointer(V);
+  if (auto *GEP = dyn_cast<GetElementPtrInst>(V))
+    return GEP->getSourceElementType();
+  if (auto *LI = dyn_cast<LoadInst>(V))
+    return LI->getType();
+  if (auto *SI = dyn_cast<StoreInst>(V))
+    return SI->getValueOperand()->getType();
+  llvm_unreachable("Unhandled instruction for getPointerElementType()");
+}
+
 // Shape Methods ===============================================================
 
 Shape::Shape()

@@ -103,7 +103,7 @@ void AKGCodeGen::genMemSetOrCpy(IntrinsicInst *II, bool IsCpy) {
   const Type *ElTy = S->getElementType();
   unsigned ElSize = ElTy->getScalarSizeInBits();
   unsigned IntrElSize =
-      PtrOperand->getType()->getPointerElementType()->getScalarSizeInBits();
+      getPointerElementType(PtrOperand)->getScalarSizeInBits();
   unsigned TripCount = SizeToSet->getZExtValue();
   TripCount /= ElSize / IntrElSize;
   unsigned DimSize = S->getDim(S->getNumDims() - 1);

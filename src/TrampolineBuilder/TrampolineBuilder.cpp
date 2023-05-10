@@ -17,6 +17,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "TrampolineBuilder/TrampolineBuilder.h"
+#include "Util/ConverterUtil.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/DerivedTypes.h"
@@ -88,11 +89,11 @@ Value *TrampolineBuilder::getSyclArrayFromWrapper(Value *Root) {
   Builder.SetInsertPoint(this->TrampBlock);
 
   // Create the GEP instruction
-  Type *GEPType = Root->getType()->getScalarType()->getPointerElementType();
+  Type *GEPType = getPointerElementType(Root);
   ConstantInt *ConstZero = Builder.getInt32(0);
   Value *GEPInst = Builder.CreateGEP(GEPType, Root, {ConstZero, ConstZero});
   // Create the load instruction
-  Type *LoadType = GEPInst->getType()->getPointerElementType();
+  Type *LoadType = cast<GetElementPtrInst>(GEPInst)->getResultElementType();
   Value *SyclArray = Builder.CreateLoad(LoadType, GEPInst);
 
   // Set the Range name
@@ -129,12 +130,12 @@ Value *TrampolineBuilder::getSyclRangeDim(Value *Root, uint64_t Dim) {
   Builder.SetInsertPoint(this->TrampBlock);
 
   // Create the GEP instruction
-  Type *GEPType = Root->getType()->getScalarType()->getPointerElementType();
+  Type *GEPType = getPointerElementType(Root);
   ConstantInt *ConstZero = Builder.getInt32(0);
   Value *GEPInst = Builder.CreateGEP(
       GEPType, Root, {ConstZero, ConstZero, ConstZero, Builder.getInt64(Dim)});
   // Create the load instruction
-  Type *LoadType = GEPInst->getType()->getPointerElementType();
+  Type *LoadType = cast<GetElementPtrInst>(GEPInst)->getResultElementType();
   Value *RangeDim = Builder.CreateLoad(LoadType, GEPInst);
 
   // Set the Range name
@@ -196,12 +197,12 @@ Value *TrampolineBuilder::getSyclDim(Value *Root) {
 
   // Create the GEP
   // Dim should be in the form on {i64}*, hence `GEP Val, 0, 0`
-  Type *GEPType = Root->getType()->getScalarType()->getPointerElementType();
+  Type *GEPType = getPointerElementType(Root);
   ConstantInt *ConstZero = Builder.getInt32(0);
   Value *GEPInst = Builder.CreateGEP(GEPType, Root, {ConstZero, ConstZero});
 
   // Create the Load
-  Type *LoadType = GEPInst->getType()->getPointerElementType();
+  Type *LoadType = cast<GetElementPtrInst>(GEPInst)->getResultElementType();
   Value *Dim = Builder.CreateLoad(LoadType, GEPInst);
 
   // Set the Dim name

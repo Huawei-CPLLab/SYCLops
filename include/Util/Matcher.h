@@ -29,7 +29,7 @@ namespace converter {
 
 void matchLoopGuard(Loop *L, BranchInst *BI, BasicBlock *&Preheader);
 
-const Type *matchVecStore(const StoreInst *SI);
+Type *matchVecStore(StoreInst *SI);
 
 Value *matchExpandedURem(Instruction *I);
 

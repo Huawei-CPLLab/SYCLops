@@ -99,9 +99,9 @@ void matchLoopGuard(Loop *L, BranchInst *BI, BasicBlock *&Preheader) {
   return;
 }
 
-const Type *matchVecStore(const StoreInst *SI) {
-  const Value *StoreVal = SI->getValueOperand();
-  const Value *PtrVal = SI->getPointerOperand();
+Type *matchVecStore(StoreInst *SI) {
+  Value *StoreVal = SI->getValueOperand();
+  Value *PtrVal = SI->getPointerOperand();
 
   Constant *ConstVec;
   if (match(StoreVal, m_Shuffle(m_Value(), m_Constant(ConstVec)))) {
@@ -113,7 +113,7 @@ const Type *matchVecStore(const StoreInst *SI) {
         PtrVal = CI->getOperand(0);
 
       // find the original type
-      Type *OriginalTy = PtrVal->getType()->getPointerElementType();
+      Type *OriginalTy = getPointerElementType(PtrVal);
       while (OriginalTy->isStructTy())
         OriginalTy = OriginalTy->getStructElementType(0);
       if (OriginalTy->isVectorTy())

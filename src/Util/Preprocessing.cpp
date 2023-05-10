@@ -58,7 +58,7 @@ struct ByvalStructPromoter {
         if (!Alloca)
           continue;
         // Then check to see if its allocating a struct
-        AllocaTy = dyn_cast<StructType>(Alloca->getType()->getElementType());
+        AllocaTy = dyn_cast<StructType>(Alloca->getAllocatedType());
         if (!AllocaTy)
           continue;
         // Then check to see if its allocating simple structs that isn't the
@@ -167,6 +167,7 @@ struct ByvalStructPromoter {
   Type *getIndexedType(Value *Val, ArrayRef<uint64_t> Indices) {
     Type *Ty = Val->getType();
     assert(Ty->isPointerTy());
+    bool FirstIter = true;
     for (uint64_t Idx : Indices) {
       if (auto *StructTy = dyn_cast<StructType>(Ty))
         Ty = StructTy->getElementType(Idx);
@@ -174,11 +175,14 @@ struct ByvalStructPromoter {
         Ty = ArrTy->getElementType();
       else if (auto *VecTy = dyn_cast<VectorType>(Ty))
         Ty = VecTy->getElementType();
-      else if (auto *PtrTy = dyn_cast<PointerType>(Ty))
-        Ty = PtrTy->getElementType();
-      else
+      else if (isa<PointerType>(Ty)) {
+        assert(FirstIter && "Unexpected nested pointer type");
+        Ty = getPointerElementType(Val);
+      } else
         return nullptr;
+      FirstIter = false;
     }
+    (void)FirstIter;
     return Ty;
   }
 
@@ -268,7 +272,7 @@ struct ByvalStructPromoter {
       Builder->SetInsertPoint(GEP);
       unsigned AS = GEP->getAddressSpace();
       Type *SrcTy = NewBase->getType();
-      Type *ElTy = SrcTy->getPointerElementType();
+      Type *ElTy = getPointerElementType(NewBase);
       if (SrcTy->getPointerAddressSpace() != AS) {
         SrcTy = PointerType::get(ElTy, AS);
         NewBase = Builder->CreateAddrSpaceCast(NewBase, SrcTy);
@@ -940,19 +944,19 @@ void Preprocessor::eliminateAllocas() {
     Value *Src = Pair.second;
     LLVM_DEBUG(dbgs() << "Found alloca: "; AI->dump();
                dbgs() << "\twith source: "; Src->dump());
-    PointerType *AllocaTy = AI->getType();
     Type *SrcTy = Src->getType();
     auto *SrcPTy = dyn_cast<PointerType>(SrcTy);
     if (!SrcPTy) {
       LLVM_DEBUG(dbgs() << "No handling of non-pointer src type\n");
       continue;
     }
-    if (AllocaTy->getPointerElementType() != SrcPTy->getPointerElementType()) {
+    if (AI->getAllocatedType() != getPointerElementType(Src)) {
       LLVM_DEBUG(dbgs() << "No handling of non-simple copies\n");
       continue;
     }
     Builder->SetInsertPoint(AI);
     Value *NewVal = Src;
+    PointerType *AllocaTy = AI->getType();
     if (AllocaTy->getAddressSpace() != SrcPTy->getAddressSpace())
       NewVal = Builder->CreateAddrSpaceCast(NewVal, AllocaTy);
     for (auto Pair : ToErase) {
@@ -1465,10 +1469,11 @@ void Preprocessor::removeHalfToI16() {
         Type *SrcTy = BC->getSrcTy();
         if (!SrcTy->isPointerTy())
           continue;
-        Type *SrcEltTy = SrcTy->getPointerElementType();
+        Value *SrcVal = BC->getOperand(0);
+        Type *SrcEltTy = getPointerElementType(SrcVal);
         if (SrcEltTy->isStructTy())
           SrcEltTy = SrcEltTy->getStructElementType(0);
-        Type *DestEltTy = BC->getDestTy()->getPointerElementType();
+        Type *DestEltTy = getPointerElementType(BC);
         if (SrcEltTy->isHalfTy() && DestEltTy->isIntegerTy(16))
           HalfToI16PtrBitcasts.push_back(BC);
       }
@@ -1826,11 +1831,9 @@ Preprocessor::parseAccessorArguments(ValueMap<Value *, Shape> &ShapeMap) {
   auto GetRangeDims = [&](Argument *Arg) -> int {
     if (Arg == ArgEnd)
       return -1;
-    auto *RangePtrTy = dyn_cast<PointerType>(Arg->getType());
-    // device accessor range objects should be in addrspace 0
-    if (!RangePtrTy)
+    if (!isa<PointerType>(Arg->getType()))
       return -1;
-    const Type *ElTy = RangePtrTy->getElementType();
+    const Type *ElTy = getPointerElementType(Arg);
     unsigned TypeLevel = unwrapStructs(ElTy);
     auto *RangeArrTy = dyn_cast<ArrayType>(ElTy);
     // the range array need to be of integers
@@ -1855,7 +1858,7 @@ Preprocessor::parseAccessorArguments(ValueMap<Value *, Shape> &ShapeMap) {
     // Right now we only support buffers of vectors or scalar types
     if (!PtrTy)
       continue;
-    Type *BaseElTy = PtrTy->getElementType();
+    Type *BaseElTy = getPointerElementType(PtrVal);
     if (!BaseElTy->isSingleValueType())
       continue;
 

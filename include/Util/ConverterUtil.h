@@ -47,6 +47,8 @@ Value *tracePastCastAndGEP(Value *V);
 
 unsigned unwrapStructs(const Type *&Ty);
 
+Type *getPointerElementType(Value *V);
+
 // =============================================================================
 // Utility classes
 // =============================================================================
