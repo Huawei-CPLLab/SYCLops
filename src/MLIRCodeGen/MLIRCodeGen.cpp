@@ -1300,6 +1300,8 @@ mlir::Value MLIRCodeGen::genCallInst(const CallInst *CI) {
     return Builder.create<math::SqrtOp>(Loc, Operands).getResult();
   if (FuncName == "_Z23__spirv_ocl_fmin_commonff")
     return Builder.create<arith::MinFOp>(Loc, Operands).getResult();
+  if (FuncName == "_Z23__spirv_ocl_fmax_commonff")
+    return Builder.create<arith::MaxFOp>(Loc, Operands).getResult();
   if (FuncName == "_Z17__spirv_ocl_s_minii")
     return Builder.create<arith::MinSIOp>(Loc, Operands).getResult();
   if (FuncName == "_Z17__spirv_ocl_s_maxii")

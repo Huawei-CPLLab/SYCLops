@@ -6,15 +6,16 @@
 //
 //===----------------------------------------------------------------------===//
 {
-    "exp",        // sycl::exp -> VEXP
-    "s_min",      // sycl::min (signed ints) -> VMIN
-    "s_max",      // sycl::max (signed ints) -> VMAX
-    "s_min",      // sycl::min (unsigned ints) -> VMIN
-    "s_max",      // sycl::max (unsigned ints) -> VMAX
-    "fmax",       // sycl::fmax
-    "fmin",       // sycl::fmin
-    "sqrt",       // sycl::sqrt
-    "fmin_common" // another version of sycl::fmin generated based on type
+    "exp",         // sycl::exp -> VEXP
+    "s_min",       // sycl::min (signed ints) -> VMIN
+    "s_max",       // sycl::max (signed ints) -> VMAX
+    "s_min",       // sycl::min (unsigned ints) -> VMIN
+    "s_max",       // sycl::max (unsigned ints) -> VMAX
+    "fmax",        // sycl::fmax
+    "fmin",        // sycl::fmin
+    "sqrt",        // sycl::sqrt
+    "fmax_common", // another version of sycl::fmax generated based on type
+    "fmin_common"  // another version of sycl::fmin generated based on type
 };
 // End supported builtin list ==================================================
 
